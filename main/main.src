@@ -1,17 +1,17 @@
 commands = {
-    "help":help, "clear":clear, "credits":credits, "nmap":nmap, "exploitscan":exploitscan, "exploit":exploit, "targets":targets, "use":use, "back":back, "deltarget":deltarget, "ls":ls,
+    "help":help, "clear":clear,"nmap":nmap, "exploitscan":exploitscan, "exploit":exploit, "targets":targets, "use":use, "back":back, "deltarget":deltarget, "ls":ls,
     "cat":cat, "ps":ps, "corruptlogs":corruptlogs, "buffer":buffer, "nslookup":nsLookup, "whois":whoisLookup, "scanlib":scanlib, "scanlib":scanlib, "addobject":addobject, "fs":fs,
     "exec":exec, "kill":kill, "mv":mv, "cp":cp, "rm":rm, "touch":makeFile, "mkdir":mkdir, "write":write,"compile":compile, "chmod":chmodFile, "chown":chown, "chgrp":chgrp, "passwd":passwd,
     "adduser":adduser, "deluser":deluser, "groups":getGroups, "addgroup":addgroup, "delgroup":delgroup, "get":shellGet, "put":shellPut, "sniffer":sniff, "secure":secure, "wipe":wipe,
-    "addvar":addvar, "delvar":delvar, "vars":vars, "gpg":gpg, "md5":md5_hash, "sha256":sha256, "airmon":airmonitor,"iwlist":iwlist, "aireplay":airkick, "aircrack":crack_cap, "shell":shell,
+    "addvar":addvar, "delvar":delvar, "vars":vars, "md5":md5_hash, "sha256":sha256, "airmon":airmonitor,"iwlist":iwlist, "aireplay":airkick, "aircrack":crack_cap, "shell":shell,
     "loop":loop, "ssh":ssh, "sudo":sudo, "jump":jump, "msfvenom":msfvenom, "msfconsole":msfconsole, "grab":grab, "findlib":findlib, "deepscan":deepscan, "apt-get":aptget, "libs":libs,
-    "uselib":uselib, "getlib":getlib, "dellib":dellib, "crack":crack, "getviper":getviper, "exit":do_exit, "save-settings":saveSettings, "load-theme":load_theme, "return":returnStart,
-    "echo":echo,
+    "uselib":uselib, "getlib":getlib, "dellib":dellib, "crack":crack, "exit":do_exit, "save-settings":saveSettings, "load-theme":load_theme, "return":returnStart,
+    "echo":echo, "randomip":randomip, "decipherfile":decipherfile, "scanrouter":scanrouter,
 }
 
 main_session = {
     "exit":false,
-    "version":"2.2.1",
+    "version":"2.3",
     "MetaxploitLib":null,
     "MetaxploitLibPublicIP":null,
     "MetaxploitLibLocalIP":null,
@@ -39,32 +39,32 @@ main_session = {
 
 user_session = {
     "theme":{
-        "title":"#e60000",   // red
-        "text":"#404040",    // dark-grey
-        "arg":"#00ff00",     // green
+        "title":"#3636BFFF",   // red
+        "text":"#777777FF",    // dark-grey
+        "arg":"#15B8E8FF",     // green
         "bool":"#00ace6",    // light-blue
-        "outline":"#404040", // dark-grey
-        "start_color":"#e60000",
-        "handler_color":"#00ff00",
+        "outline":"#777777FF", // dark-grey
+        "start_color":"#3636BFFF",
+        "handler_color":"#15B8E8FF",
     },
     "static":{
         "logo":"#cccccc",    // grey
         "credits":"#ffffff", // white
-        "red":"#e60000",
-        "green":"#00ff00",
-        "dark_grey":"#404040",
+        "red":"#3636BFFF",
+        "green":"#15B8E8FF",
+        "dark_grey":"#777777FF",
         "yellow":"#e6e600",
-        "blue":"#000099",
+        "blue":"#3636BFFF",
         "light_blue":"#00ace6",
     },
 }
-
+import_code("/home/Morrigan/src/viper/viper_img.src")
 if params.indexOf("-a") != null or params.indexOf("--anonymous") != null then main_session.pub_ip = "HIDDEN"
 import_libs()
 update_check()
 addDefaultVars()
+
 if params.indexOf("--no-settings") == null and params.indexOf("-ns") == null then loadSettings()
-import_code("/home/volk/viper.img")
 ascii_print()
 
 injectionFlag = "Congrats, you were able to inject Viper! Your flag code is: ^E%aW$%k#5UX=1ay3r8Eu=V87$n$+rDF"
