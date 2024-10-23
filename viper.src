@@ -1,662 +1,3 @@
-//AES128
-AES128 = function(choice, key, text) // Returns null if any error (could mean undecryptable ciphertext)
-
-	if typeof(key) != "string" then return null
-	if key.len != 16 then return null
-	if typeof(text) != "string" then return null
-	if typeof(choice) != "string" then return null
-
-	byte_key = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-	for i in key.indexes
-		byte_key[i] = key[i].code
-	end for
-	key = byte_key[0:]
-
-	// Define lookup tables
-	Sbox = []
-	Sbox=Sbox+[99,124,119,123,242,107,111,197,48,1,103,43,254,215,171,118,202,130,201,125,250,89,71,240,173,212,162,175,156,164,114,192,183,253,147,38]
-	Sbox=Sbox+[54,63,247,204,52,165,229,241,113,216,49,21,4,199,35,195,24,150,5,154,7,18,128,226,235,39,178,117,9,131,44,26,27,110,90,160,82,59,214,179]
-	Sbox=Sbox+[41,227,47,132,83,209,0,237,32,252,177,91,106,203,190,57,74,76,88,207,208,239,170,251,67,77,51,133,69,249,2,127,80,60,159,168,81,163,64]
-	Sbox=Sbox+[143,146,157,56,245,188,182,218,33,16,255,243,210,205,12,19,236,95,151,68,23,196,167,126,61,100,93,25,115,96,129,79,220,34,42,144,136,70]
-	Sbox=Sbox+[238,184,20,222,94,11,219,224,50,58,10,73,6,36,92,194,211,172,98,145,149,228,121,231,200,55,109,141,213,78,169,108,86,244,234,101,122,174]
-	Sbox=Sbox+[8,186,120,37,46,28,166,180,198,232,221,116,31,75,189,139,138,112,62,181,102,72,3,246,14,97,53,87,185,134,193,29,158,225,248,152,17,105]
-	Sbox=Sbox+[217,142,148,155,30,135,233,206,85,40,223,140,161,137,13,191,230,66,104,65,153,45,15,176,84,187,22]
-
-	Rcon = [1, 2, 4, 8, 16, 32, 64, 128, 27, 54]
-
-	Mult2 = []
-	Mult2=Mult2+[0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,72,74,76,78,80,82,84,86,88,90]
-	Mult2=Mult2+[92,94,96,98,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158]
-	Mult2=Mult2+[160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200,202,204,206,208,210,212,214,216,218,220,222,224]
-	Mult2=Mult2+[226,228,230,232,234,236,238,240,242,244,246,248,250,252,254,27,25,31,29,19,17,23,21,11,9,15,13,3,1,7,5,59,57,63,61,51,49,55,53,43,41]
-	Mult2=Mult2+[47,45,35,33,39,37,91,89,95,93,83,81,87,85,75,73,79,77,67,65,71,69,123,121,127,125,115,113,119,117,107,105,111,109,99,97,103,101,155]
-	Mult2=Mult2+[153,159,157,147,145,151,149,139,137,143,141,131,129,135,133,187,185,191,189,179,177,183,181,171,169,175,173,163,161,167,165,219,217]
-	Mult2=Mult2+[223,221,211,209,215,213,203,201,207,205,195,193,199,197,251,249,255,253,243,241,247,245,235,233,239,237,227,225,231,229]
-
-
-	SubBytes = function(column)
-		column = column[0:]
-		for i in column.indexes
-			column[i] = Sbox[column[i]]
-		end for
-		return column
-	end function
-
-	WordXor = function(word1, word2)
-		result = [0, 0, 0, 0]
-		for i in result.indexes
-			result[i] = bitwise("^", word1[i], word2[i])
-		end for
-		return result
-	end function
-
-	AddRoundKey = function(state, key, roundNum)
-		roundKey = key[roundNum*4:roundNum*4+4]
-		return [WordXor(state[0], roundKey[0]), WordXor(state[1], roundKey[1]), WordXor(state[2], roundKey[2]), WordXor(state[3], roundKey[3])]
-	end function
-
-	ExpandKey = function(key)
-		W = [key[0:4], key[4:8], key[8:12], key[12:16]]
-		
-		for i in range(4, 40, 4)
-			W = W + [[], [], [], []]
-			W[i] = W[i-1][1:] + [W[i-1][0]] // RotWord
-			W[i] = SubBytes(W[i])
-			W[i] = WordXor(W[i-4], W[i])
-			W[i][0] = bitwise("^", Rcon[i/4-1], W[i][0])
-			for j in range(i+1, i+3)
-				W[j] = WordXor(W[j-4], W[j-1])
-			end for
-		end for
-		return W
-	end function
-
-	aesEncrypt = function(key, block) // Expects already formatted block
-		Mult2 = @Mult2
-		key = key[0:]
-		State = block[0:]
-		
-		// Declaring functions
-		ShiftRows = function(state)
-			state = state[0:]
-			tmp = state[0][1]
-			state[0][1] = state[1][1]
-			state[1][1] = state[2][1]
-			state[2][1] = state[3][1]
-			state[3][1] = tmp
-			
-			for i in range(1)
-				tmp = state[0][2]
-				state[0][2] = state[1][2]
-				state[1][2] = state[2][2]
-				state[2][2] = state[3][2]
-				state[3][2] = tmp
-			end for
-			
-			tmp = state[3][3]
-			state[3][3] = state[2][3]
-			state[2][3] = state[1][3]
-			state[1][3] = state[0][3]
-			state[0][3] = tmp
-			return state
-		end function
-		
-		matrix = [[2, 3, 1, 1], [1, 2, 3, 1], [1, 1, 2, 3], [3, 1, 1, 2]]
-		
-		MixColumns = function(state)
-			state = state[0:]
-			for column in state.indexes
-				endcolumn = [0, 0, 0, 0]
-				for i in matrix.indexes
-					tmp = state[column][0:]
-					for j in matrix[i].indexes
-						if matrix[i][j] == 1 then continue
-						tmp[j] = Mult2[state[column][j]]
-						if matrix[i][j] != 3 then continue
-						tmp[j] = bitwise("^", tmp[j], state[column][j])
-					end for
-					endcolumn[i] = bitwise("^", bitwise("^", bitwise("^", tmp[0], tmp[1]), tmp[2]), tmp[3])
-				end for
-				state[column] = endcolumn[0:]
-			end for
-			return state
-		end function
-		
-		// The algorithm
-		State = AddRoundKey(State, key, 0)
-		
-		for round in range(1, 9)
-			State = [SubBytes(State[0]), SubBytes(State[1]), SubBytes(State[2]), SubBytes(State[3])]
-			State = ShiftRows(State)
-			State = MixColumns(State)
-			State = AddRoundKey(State, key, round)
-		end for
-			
-		State = [SubBytes(State[0]), SubBytes(State[1]), SubBytes(State[2]), SubBytes(State[3])]
-		State = ShiftRows(State)
-		State = AddRoundKey(State, key, 10)
-		
-		return State
-	end function
-
-
-	aesDecrypt = function(key, block) // Expects already formatted block
-		Mult2 = @Mult2
-		Sbox = @Sbox
-		key = key[0:]
-		State = block[0:]
-		
-		// Declare functions
-		InvShiftRows = function(state)
-			state = state[0:]
-			tmp = state[3][1]
-			state[3][1] = state[2][1]
-			state[2][1] = state[1][1]
-			state[1][1] = state[0][1]
-			state[0][1] = tmp
-			
-			for i in range(1)
-				tmp = state[3][2]
-				state[3][2] = state[2][2]
-				state[2][2] = state[1][2]
-				state[1][2] = state[0][2]
-				state[0][2] = tmp
-			end for
-			
-			tmp = state[0][3]
-			state[0][3] = state[1][3]
-			state[1][3] = state[2][3]
-			state[2][3] = state[3][3]
-			state[3][3] = tmp
-			return state
-		end function
-		
-		InvSubBytes = function(column)
-			column = column[0:]
-			for i in column.indexes
-				column[i] = Sbox.indexOf(column[i])
-			end for
-			return column
-		end function
-		
-		matrix = [[14, 11, 13, 9], [9, 14, 11, 13], [13, 9, 14, 11], [11, 13, 9, 14]]
-		
-		InvMixColumns = function(state)
-			state = state[0:]
-			for column in state.indexes
-				endcolumn = [0, 0, 0, 0]
-				for i in matrix.indexes
-					tmp = state[column][0:]
-					for j in matrix[i].indexes
-						if matrix[i][j] == 9 then
-							tmp[j] = bitwise("^", Mult2[Mult2[Mult2[state[column][j]]]], state[column][j])
-						else if matrix[i][j] == 11 then
-							tmp[j] = bitwise("^", Mult2[bitwise("^", Mult2[Mult2[state[column][j]]], state[column][j])], state[column][j])
-						else if matrix[i][j] == 13 then
-							tmp[j] = bitwise("^", Mult2[Mult2[bitwise("^", Mult2[state[column][j]], state[column][j])]], state[column][j])
-						else
-							tmp[j] = Mult2[bitwise("^", Mult2[bitwise("^", Mult2[state[column][j]], state[column][j])], state[column][j])]
-						end if
-					end for
-					endcolumn[i] = bitwise("^", bitwise("^", bitwise("^", tmp[0], tmp[1]), tmp[2]), tmp[3])
-				end for
-				state[column] = endcolumn[0:]
-			end for
-			return state
-		end function
-		
-		// The actual algorithm
-		State = AddRoundKey(State, key, 10)
-		
-		for round in range(9, 1)
-			State = InvShiftRows(State)
-			State = [InvSubBytes(State[0]), InvSubBytes(State[1]), InvSubBytes(State[2]), InvSubBytes(State[3])]
-			State = AddRoundKey(State, key, round)
-			State = InvMixColumns(State)
-		end for
-		
-		State = InvShiftRows(State)
-		State = [InvSubBytes(State[0]), InvSubBytes(State[1]), InvSubBytes(State[2]), InvSubBytes(State[3])]
-		State = AddRoundKey(State, key, 0)
-		
-		return State
-	end function
-
-
-	// Generate IV
-	IV = []
-	for byte in key
-		IV = IV + [floor(rnd(byte)*256)] // Warning: rnd is not cryptographically secure
-	end for
-
-	key = ExpandKey(key)
-
-	b64Table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-	if choice == "encrypt" then
-		Blocks = [[]]
-		b=0
-		for char in text
-			Blocks[b] = Blocks[b] + [code(char)]
-			if Blocks[b].len == 16 then
-				Blocks = Blocks + [[]]
-				b=b+1
-			end if
-		end for
-		
-		// Pad with CMS (Crytographic Message Syntax)
-		padNum = 16 - Blocks[-1].len
-		for i in range(padNum-1)
-			Blocks[-1] = Blocks[-1] + [padNum]
-		end for
-		
-		// XOR first block with IV
-		for i in IV.indexes
-			Blocks[0][i] = bitwise("^", Blocks[0][i], IV[i])
-		end for
-		
-		// Format blocks
-		for i in Blocks.indexes
-			Blocks[i] = [Blocks[i][0:4], Blocks[i][4:8], Blocks[i][8:12], Blocks[i][12:16]]
-		end for
-		
-		// Encode blocks
-		Blocks[0] = aesEncrypt(key, Blocks[0])
-		if Blocks.len > 1 then
-			for i in range(1, Blocks.len-1)
-				for column in Blocks[i].indexes
-					for byte in Blocks[i][column].indexes
-						Blocks[i][column][byte] = bitwise("^", Blocks[i][column][byte], Blocks[i-1][column][byte])
-					end for
-				end for
-				Blocks[i] = aesEncrypt(key, Blocks[i])
-			end for
-		end if
-		
-		// Convert blocks to array of bytes
-		arr = []
-		for Block in Blocks
-			for column in Block
-				for byte in column
-					arr = arr + [byte]
-				end for
-			end for
-		end for
-		
-		// Convert array into base 64
-		output = ""
-		for i in range(0, arr.len-1, 3)
-			buffer = arr[i]*65536
-			if arr.hasIndex(i+1) then
-				buffer = buffer+arr[i+1]*256
-				if arr.hasIndex(i+2) then buffer = buffer+arr[i+2]
-			end if
-			
-			if arr.hasIndex(i+2) then
-				for j in range(3)
-					output = output + b64Table[floor(buffer/64^j)%64]
-				end for
-			else
-				if arr.hasIndex(i+1) then
-					for j in range(3,1)
-						output = output + b64Table[floor(buffer/64^j)%64]
-					end for
-				else
-					for j in range(3,2)
-						output = output + b64Table[floor(buffer/64^j)%64]
-					end for
-				end if
-			end if
-		end for
-		return output
-	end if
-
-	if choice == "decrypt" then
-		if text.len % 4 == 1 then return null
-		
-		// Convert base 64 into sextet array
-		s_arr = text.values
-		for i in s_arr.indexes
-			tmp = b64Table.indexOf(s_arr[i])
-			if tmp == null then return null
-			s_arr[i] = tmp
-		end for
-		
-		// Convert sextets to bytes
-		b_arr = []
-		for i in range(0, s_arr.len-1, 4)
-			buffer = s_arr[i]*262144
-			if s_arr.hasIndex(i+1) then
-				buffer = buffer+s_arr[i+1]*4096
-				if s_arr.hasIndex(i+2) then
-					buffer = buffer+s_arr[i+2]*64
-					if s_arr.hasIndex(i+3) then buffer = buffer+s_arr[i+3]
-				end if
-			end if
-			
-			if s_arr.hasIndex(i+3) then
-				for j in range(2)
-					b_arr = b_arr + [floor(buffer/256^j)%256]
-				end for
-			else
-				if s_arr.hasIndex(i+2) then
-					for j in range(2,1)
-						b_arr = b_arr + [floor(buffer/256^j)%256]
-					end for
-				else
-					b_arr = b_arr + [floor(buffer/65526)%256]
-				end if
-			end if
-		end for
-		
-		// Convert byte array to blocks
-		Blocks = [[]]
-		b=0
-		while b_arr.len > 0
-			if Blocks[b].len == 16 then
-				Blocks = Blocks + [[]]
-				b=b+1
-			end if
-			Blocks[b] = Blocks[b] + [b_arr.pull]
-		end while
-		if Blocks[-1].len != 16 then return null
-		
-		// Format blocks
-		for i in Blocks.indexes
-			Blocks[i] = [Blocks[i][0:4], Blocks[i][4:8], Blocks[i][8:12], Blocks[i][12:16]]
-		end for
-		
-		// Decode blocks
-		NewBlocks = Blocks[0:]
-		for i in Blocks.indexes
-			NewBlocks[i] = aesDecrypt(key, Blocks[i])
-		end for
-		
-		// XOR blocks
-		for column in Blocks[0].indexes
-			for byte in Blocks[i][column].indexes
-				NewBlocks[0][column][byte] = bitwise("^", NewBlocks[0][column][byte], IV[column*4+byte])
-			end for
-		end for
-		if Blocks.len > 1 then
-			for i in range(1, Blocks.len-1)
-				for column in Blocks[i].indexes
-					for byte in Blocks[i][column].indexes
-						NewBlocks[i][column][byte] = bitwise("^", NewBlocks[i][column][byte], Blocks[i-1][column][byte])
-					end for
-				end for
-			end for
-		end if
-		
-		Blocks = NewBlocks[0:]
-		
-		// Convert blocks to array of bytes
-		arr = []
-		for Block in Blocks
-			for column in Block
-				for byte in column
-					arr = arr + [byte]
-				end for
-			end for
-		end for
-		
-		// Remove padding
-		if arr[-1] > 16 or arr[-1] == 0 then return null
-		for i in range(arr[-1]-1)
-			arr.pop
-		end for
-		
-		// Convert array to text
-		output = ""
-		for byte in arr
-			output = output + char(byte)
-		end for
-		return output
-	end if
-
-	return null
-end function
-Escape = function(text)
-    return text.replace("(?=\\|\.|\+|\*|\?|\^|\$|\(|\)|\[|\]|\{|\}|\|)","\")
-end function
-//json Parser
-//parse(file.get_content) //will load a json text file into a map
-//toJSON(map) //will convert the map to json string
-Parser={"hex_digit_map":{},"escape_to":["\\","\""","\b","\t","\n","\f","\r"],"eol":char(13),"escape_from":["\","""",char(8),char(9),char(10),char(12),char(13)],"escape_indexes":0,"white_space":" "+char(9)+char(10)+char(13),"source":"","source_len":0,"p":0,"classID":"ParserLib   1.0.0-rc.1"}
-Parser.hex_to_int=function(s)
-	r=0
-	for c in s
-		r=r*16+self.hex_digit_map[c]
-	end for
-	return r
-end function
-Parser.escape=function(s)
-	self.escape_indexes=self.escape_from.indexes
-	for i in self.escape_indexes
-		s=s.replace(Escape(self.escape_from[i]),self.escape_to[i])
-	end for
-	return s
-end function
-Parser.unescape=function(s)
-	r=[]
-	for i in range(0,15)
-		if i<10 then
-			self.hex_digit_map[str(i)]=i
-		else
-			self.hex_digit_map[char(55+i)]=i
-			hex_digit_map[char(87+i)]=i
-		end if
-	end for
-	i=0
-	m=s.len
-	while i<m
-		d=1
-		if s[i]=="\" then
-			d=2
-			c=s[i+1]
-			if c=="b" then
-				r.push char(8)
-				i=i+d
-				continue
-			end if
-			if c=="t" then
-				r.push char(9)
-				i=i+d
-				continue
-			end if
-			if c=="n" then
-				r.push char(10)
-				i=i+d
-				continue
-			end if
-			if c=="f" then
-				r.push char(12)
-				i=i+d
-				continue
-			end if
-			if c=="r" then
-				r.push char(13)
-				i=i+d
-				continue
-			end if
-			if c=="u" then
-				h=s[i+2:i+6]
-				r.push char(self.hex_to_int(h))
-				d=6
-				i=i+d
-				continue
-			end if
-			r.push c
-		else
-			r.push s[i]
-		end if
-		i=i+d
-	end while
-	return r.join("")
-end function
-Parser.init=function(s)
-	self.source=s
-	self.source_len=s.len
-end function
-Parser.parse=function(s=null)
-	if s!=null then self.init s
-	self.p=0
-	return self.parse_element
-end function
-Parser.skip_white_space=function
-	while self.p<self.source_len
-		c = self.source[self.p]
-		if self.white_space.indexOf(c)==null then break
-		self.p=self.p+1
-	end while
-end function
-Parser.parse_element=function
-	return self.parse_value
-end function
-Parser.parse_value=function
-	self.skip_white_space
-	if not self.source.hasIndex(self.p) then return 0
-	c=self.source[self.p]
-	if c=="""" then return self.parse_string
-	if "0123456789-.".indexOf(c)!=null then return self.parse_number
-	if c=="[" then return self.parse_list
-	if c=="{" then return self.parse_map
-	if c=="t" and self.source[self.p:self.p+4]=="true" then
-		self.p=self.p+4
-		return 1
-	end if
-	if c=="f" and self.source[self.p:self.p+5]=="false" then
-		self.p=self.p+5
-		return 0
-	end if
-	if c=="n" and self.source[self.p:self.p+4]=="null" then
-		self.p=self.p+4
-		return null
-	end if
-end function
-Parser.parse_list=function
-	self.p=self.p+1
-	self.skip_white_space
-	r=[]
-	while self.p<self.source_len
-		c=self.source[self.p]
-		if c=="]" then break
-		r.push self.parse_element
-		self.skip_white_space
-		c=self.source[self.p]
-		if c=="," then
-			self.p=self.p+1
-			self.skip_white_space
-		end if
-	end while
-	self.p=self.p+1
-	return r
-end function
-Parser.parse_map=function
-	self.p=self.p+1
-	self.skip_white_space
-	r={}
-	while self.p<self.source_len
-		c=self.source[self.p]
-		if c=="}" then break
-		if c!="""" then
-			Error.er("Object member key must be a string literal"+Str.n+"Error at position "+self.p+": "+self.source[self.p-60:self.p+60],"JSON")
-			return null
-		end if
-		k=self.parse_string
-		self.skip_white_space
-		if self.source[self.p]!=":" then
-			Error.er("Colon expected"+Str.n+"Error at position "+self.p+": "+self.source[self.p-60:self.p+60])
-			return null
-		end if
-		self.p=self.p+1
-		self.skip_white_space
-		v=self.parse_element
-		r[k]=v
-		self.skip_white_space
-		c=self.source[self.p]
-		if c=="," then
-			self.p=self.p + 1
-			self.skip_white_space
-		end if
-	end while
-	self.p=self.p + 1
-	return r
-end function
-Parser.parse_string=function
-	self.p=self.p + 1
-	s=self.p
-	e=0
-	while self.p<self.source_len
-		c=self.source[self.p]
-		self.p=self.p+1
-		if c=="""" then break
-		if c=="\" then
-			e=1
-			self.p=self.p+1
-		end if
-	end while
-	r=self.source[s:self.p-1]
-	if e then r=unescape(r)
-	return r
-end function
-Parser.parse_number=function
-	s = self.p
-	while self.p < self.source_len
-		c=self.source[self.p]
-		if "0123456789+-.eE".indexOf(c)==null then break
-		self.p=self.p+1
-	end while
-	r=val(self.source[s:self.p])
-	return r
-end function
-Parser.list_to_JSON=function(l,c,d)
-	w=(self.eol+"  "*(d+1))*(not c)
-	p=["[",w]
-	f=1
-	for i in l
-		if not f then
-			p.push ","
-			p.push w
-		end if
-		p.push toJSON(i,c,d+1)
-		f=0
-	end for
-	if not c then p.push self.eol+"  "*d
-	p.push "]"
-	return join(p,"")
-end function
-Parser.map_to_JSON=function(l,c,d)
-	w=(self.eol+"  "*(d+1))*(not c)
-	p=["{",w]
-	f=1
-	for k in l
-		if not f then
-			p.push ","
-			p.push w
-		end if
-		p.push toJSON(str(k.key))
-		p.push ":"
-		if not c then p.push " "
-		p.push toJSON(@k.value,c,d+1)
-		f=0
-	end for
-	if not c then p.push self.eol+"  "*d
-	p.push "}"
-	return join(p,"")
-end function
-toJSON=function(v,c=0,i=0)
-	if @v isa funcRef then return ""+@v+""
-	if v == null then return "null"
-	if v isa number then return str(v)
-	if v isa string then return """"+Parser.escape(v)+""""
-	if v isa list then return Parser.list_to_JSON(v,c,i)
-	if v isa map then return Parser.map_to_JSON(v,c,i)
-end function
-parse=function(s)
-	p=new Parser
-	return p.parse(s)
-end function
 recursiveCheck = function(anyObject, maxdepth=20)
     if maxdepth <= 0 then return false
     if @anyObject isa map or @anyObject isa list then
@@ -836,31 +177,7 @@ sha256_hash = function(args)
     end for
     print(HZ)
 end function
-// ascii_print = function()
-//     ascii = ""
-//     ascii = ascii+do_style("##############################################################################", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("       ...    ....     ...                                                  ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("      oOX0xdxO0000OkdxOK0xo                "+do_style("@@@@@@      @@@@@@", "red", "static")+"               ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("     .;:.,xmMMMMMMMMMMx,.:;.              "+do_style("@@   @@@    @@!  @@@", "red", "static")+"              ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("    :KXxokNMWWMMMMWWMWOoo0Xd.               "+do_style(".!!@!     @!@  !@!", "red", "static")+"              ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("   ;XWXXWMMMNKWMMWXXMMMWXXWWl              "+do_style("!!:        !!:  !!!", "red", "static")+"              ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("   ;XWd.lXW0lldxxxolkNWx'cXWo             "+do_style(":.:::::: ()  ::..::", "red", "static")+"               ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("    lNK,   cKc     cKc  .xNx.                                               ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("     cXk.  ';'     ':'  oXx.       ", "logo", "static")+do_style("____   ____ __                           ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("      cKo.  ';     ;'  :Kd.        ", "logo", "static")+do_style("\   \ /   /|__|______    ____ _______    ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("       :O:            'Oo.          ", "logo", "static")+do_style("\   Y   / |  |\____ \ _/ __ \\_  __ \   ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("        ;d,          .ol             ", "logo", "static")+do_style("\     /  |  ||  |_> >\  ___/ |  | \/   ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("         ':.         ;;               ", "logo", "static")+do_style("\___/   |__||   __/  \___  >|__|      ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("          ..         .                            ", "logo", "static")+do_style("|__|         \/           ", "red", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style("                                                                            ", "logo", "static")+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("#", "dark_grey", "static")+do_style(do_style(" Created by: Volk ", "bold"), "credits", "static")+"                                                        "+do_style("#", "dark_grey", "static")+char(10)
-//     ascii = ascii+do_style("##############################################################################", "dark_grey", "static")+char(10)
-//     info = do_style("LIBRARY ", "title")+do_style("PUBLICIP ", "title")+do_style("LOCALIP ", "title")+do_style("VERSION", "title")
-//     info = info+char(10)+do_style("------- ", "outline")+do_style("-------- ", "outline")+do_style("------- ", "outline")+do_style("-------", "outline")
-//     info = info+char(10)+do_style(typeof(main_session.MetaxploitLib).lower.replace("lib","")+" ", "outline")+do_style(main_session.MetaxploitLibPublicIP+" ", "outline")+do_style(main_session.MetaxploitLibLocalIP+" ", "outline")+do_style(main_session.MetaxploitLibVersion, "outline")
-//     info = info+char(10)+do_style(typeof(main_session.cryptoLib).lower.replace("lib","")+" ", "outline")+do_style(main_session.cryptoLibPublicIP+" ", "outline")+do_style(main_session.cryptoLibLocalIP+" ", "outline")+do_style(main_session.cryptoLibVersion, "outline")
-//     print(ascii+char(10) + do_style("Version", "red", "static")+do_style(": ", "dark_grey", "static")+do_style(main_session.version, "dark_grey", "static")+char(10)+char(10)+format_columns(info)+char(10)+char(10), true)
-// end function
+
 addToBuffer = function(command, args)
     for i in args
         if i != "" then command = command+" "+i
@@ -1051,9 +368,14 @@ import_libs = function()
 
 end function
 loadSettings = function(index=null)
-    configFile = get_shell.host_computer.File("/home/"+active_user+"/Config/Viper.conf")
-    if active_user() == "root" then configFile = get_shell.host_computer.File("/root/Config/Viper.conf")
+
+    if active_user() == "root" then 
+		configFile = get_shell.host_computer.File("/root/Config/Viper.conf")
+	else
+		configFile = get_shell.host_computer.File("/home/"+active_user+"/Config/Viper.conf")
+	end if
     if not configFile then return
+	
     settings = parse(configFile.get_content())
     if not settings then return
     if index != "vars" then user_session.theme = settings.theme
@@ -2060,24 +1382,60 @@ end function
 crack.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
-credits = {}
-credits.name = "credits"
-credits.args = "[N/A]"
-credits.desc = "Shows everyone that helped with Viper."
-credits.full_desc = "This command will show everyone that helped with Viper."
-credits.handler_types = ["start", "shell", "computer", "file"]
-credits.run = function(object, args)
 
-    string = char(10)
-    string = string+"Maintainer: Volk"+char(10)
-    string = string+"Viper is created by Volk."+char(10)
-    string = string+"My special thanks go to Eraser,"+char(10)
-    string = string+"for helping me refactor Viper into a more effecient program."+char(10)
-    print(string)
+decipherfile = {}
+decipherfile.name = "decipherfile"
+decipherfile.args = "[Path]"
+decipherfile.desc = "Deciphers a formatted file with encrypted hashes"
+decipherfile.full_desc = "This command will decipher a formatted txt file that has in the following format [AccountName]:[Hash].  Prints it out to the screen"
+decipherfile.handler_types = ["start", "shell"]
+decipherfile.run = function(object, args)
+    //command: decipher
+	cryptools = include_lib("/lib/crypto.so")
+	if not cryptools then exit("Error: Missing crypto library")
 
+	GetPassword = function(userPass)
+		if userPass.len != 2 then exit("decipher: " + file.path + " wrong syntax")
+		password = cryptools.decipher(userPass[1])
+		return password
+	end function
+
+	if params.len != 1 or params[0] == "-h" or params[0] == "--help" then exit(command_info("decipher_usage"))
+
+	origFile = params[0]
+	file = get_shell.host_computer.File(origFile)
+	if not file then exit("decipher: can't find " + origFile)
+	if file.is_binary then exit("decipher: can't read " + origFile + ". Binary file")
+	if not file.has_permission("r") then exit("decipher: can't read file. Permission denied")
+	if file.get_content.len == 0 then exit("decipher: no users found")
+	
+	lines = file.get_content.split("\n")
+	cracked = []
+	password = null
+	if lines.len == 1 then	
+		userPass = lines[0].split(":")
+		password = GetPassword(userPass)
+	else
+		print("Multiple users found.")
+		numLine = 1
+		for line in lines
+			if line.len > 0 then
+				userPass = lines[numLine - 1].split(":")
+				print("Deciphering user " + userPass[0])
+				password = GetPassword(userPass)
+				cracker = userPass[0] + ":" + password
+				cracked.push(cracker)
+				numLine = numLine + 1
+			end if
+		end for
+	end if
+	
+	if not password then exit("Can't find password :(")
+	for crack in cracked
+		print(crack)
+	end for
 end function
-
-credits.show_help = function()
+decipherfile.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
 
@@ -2088,7 +1446,6 @@ deepscan.desc = "Scans every IP behind a router."
 deepscan.full_desc = "This command will scan every IP behind a router where [IP] is the IP,\n when used inside the network it will scan all IP's inside the network."
 deepscan.handler_types = ["start", "shell", "computer", "file"]
 deepscan.run = function(object, args)
-
     if not args or not args.len then; self.show_help; return; end if
     if args.len == 1 then
         ip = args[0]
@@ -2686,96 +2043,7 @@ end function
 getlib.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
-getviper = {}
-getviper.name = "getviper"
-getviper.args = "[PATH] (ARGS)"
-getviper.desc = "Launches another instance of Viper."
-getviper.full_desc = "This command will launch another instance of Viper and will get the objects and imports from the other instance,\n where [PATH] is the path to the new instance of Viper,\n where (ARGS) is any optional arguments."
-getviper.handler_types = ["start", "shell"]
-getviper.run = function(object, args)
 
-    if not args then; self.show_help; return; end if
-    argument = ""
-    if args.len >= 2 then argument = args[1]
-    viperPath = object.host_computer.File(args[0])
-    if not viperPath then; print("Viper not found!"); return; end if
-    wait(1)
-    cargo = get_custom_object
-    clearInterface(cargo)
-    object.launch(args[0], argument)
-    if hasIndex(cargo, "viper") then
-        for index in @cargo.viper
-
-            if not verifyObject(@index.value.object) then // first verify index.value before index.value.object, make recusrive function to check all
-                print("AV detected injection!")
-                clearInterface(cargo)
-                return
-            end if
-            
-            main_session.objectList[main_session.objectList.len] = index.value
-        end for
-        print("Objects imported!")
-    else
-        print("Viper currupted!")
-    end if
-
-    if hasIndex(cargo, "vlibs") then
-        for index in @cargo.vlibs
-
-            if not verifyObject(@index.value.lib) then
-                print("AV detected injection!")
-                clearInterface(cargo)
-                return
-            end if
-
-            index.value["used"] = 0
-            main_session.libList[main_session.libList.len] = index.value
-        end for
-        print("Libraries imported!")
-    else
-        print("Viper currupted!")
-    end if
-    clearInterface(cargo)
-
-end function
-
-getviper.show_help = function()
-    show_help(self.name, self.args, self.full_desc, self.handler_types)
-end function
-gpg = {}
-gpg.name = "gpg"
-gpg.args = "[-e/-d] [KEY] [PATH/STRING]"
-gpg.desc = "Encrypts/decrypts a string or file."
-gpg.full_desc = "This command will encrypt or decrypt a string or file where [-e/-d] is wether to encrypt or decrypt,\n where [KEY] is a 16 character long string,\n where [PATH/STRING] is the path to a file or string to encrypt/decrypt."
-gpg.handler_types = ["start", "shell", "computer", "file"]
-gpg.run = function(object, args)
-
-    if not args or args.len < 3 then; self.show_help; return; end if
-    if typeof(object) == "shell" then object = object.host_computer.File("/var")
-    if typeof(object) == "computer" then object = object.File("/var")
-    if args[1].len != 16 then; print("Error: Key must be 16 characters long."); return; end if
-    if args[0] == "-e" then type = "encrypt"
-    if args[0] == "-d" then type = "decrypt"
-    key = args[1]
-    encString = args[2]
-    file = findFile(object, args[2])
-
-    if file != null then
-        encString = file.get_content
-    end if
-
-    r = AES128(type, key, encString)
-
-    if typeof(r) == "null" then r = "Error"
-    print("-----BEGIN GPG MESSAGE-----")
-    print(r)
-    print("-----END GPG MESSAGE-----")
-
-end function
-
-gpg.show_help = function()
-    show_help(self.name, self.args, self.full_desc, self.handler_types)
-end function
 grab = {}
 grab.name = "grab"
 grab.args = "[BANK/MAIL/ALL]"
@@ -2963,15 +2231,6 @@ jump.run = function(object, args)
     if builder.len then; print(builder); return; end if
     //file.delete
     file.set_content("")
-    // object.launch(args[0]+"/"+jumpName)
-    // return get_custom_object.gcurrentUser
-
-    //output that needs to be added in another function
-    // print(get_custom_object.gshell)
-    // print(get_custom_object.gcurrentUser)
-    // print(get_custom_object.gmetaxploit)
-    // print(get_custom_object.gcryptTools)
-
 end function
 
 jump.show_help = function()
@@ -3133,9 +2392,66 @@ ls.desc = "Lists files inside a directory."
 ls.full_desc = "This command will list all the files inside a directory,\n where [PATH] is the path to the directory."
 ls.handler_types = ["start", "shell", "computer", "file"]
 ls.run = function(object, args)
+//command: ls
+ValidateInput = function(input)
+	if input == "-la" or input == "-l" or input == "-a" then return true
+	return false
+end function 
 
-    list_files(object, args)
+if params.len > 3 or (params.len == 1 and params[0].indexOf("-") != null and not ValidateInput(params[0])) or (params.len == 2 and not ValidateInput(params[0])) or (params.len == 3 and (not ValidateInput(params[0]) or not ValidateInput(params[1]))) then
+	print(command_info("ls_usage"))
+	
+else
+	computer = get_shell.host_computer
+	folderPath = current_path
+	if params and params[params.len - 1].indexOf("-") == null then
+		folderPath = params[params.len - 1]
+	end if
+	
+	folder = computer.File(folderPath)
+	if folder == null then
+		print("ls: No such file or directory")
+	else
+		if not folder.has_permission("r") then
+			print("ls: permission denied")
 
+		else
+			showHide = 0
+			if params and params[0].indexOf("a") != null then
+				showHide = 1
+			end if
+
+			showDetails = 0
+			if params and params[0].indexOf("l") != null then
+				showDetails = 1
+			end if
+
+			subFiles = folder.get_folders + folder.get_files
+			output = ""
+			for subFile in subFiles
+				nameFile = subFile.name
+				permission = subFile.permissions
+				owner = subFile.owner
+				size = subFile.size
+				group = subFile.group
+
+				if showHide or nameFile.indexOf(".") != 0 then
+					if output.len > 0 then 
+						output = output + "\n"
+					end if
+					if showDetails then
+						output = output + permission + " " + owner + " " + group + " " + size + " 00:00 " + nameFile
+					else
+						output = output + nameFile
+					end if
+				end if
+			end for
+			
+			print(format_columns(output))
+			
+		end if
+	end if
+end if
 end function
 
 ls.show_help = function()
@@ -3458,17 +2774,77 @@ ps.full_desc = "This command will show all running processes on a computer."
 ps.handler_types = ["start", "shell", "computer"]
 ps.run = function(object, args)
 
-    if typeof(object) == "shell" then object = object.host_computer
-    info = ""
-    procs = object.show_procs.split("\n")
-    for proc in procs
-        if proc == procs[0] then
-            info=info+do_style(proc, "title")+char(10)+do_style("---- --- --- --- -------", "text")+char(10)
-            continue
-        end if
-        info=info+do_style(proc, "text")+char(10)
-    end for
-    print(char(10)+format_columns(info)+char(10))
+//command: ps
+computer = get_shell.host_computer
+
+string.color = function(hex)
+	return "<color=" + hex + ">" + self + "</color>"
+end function
+
+bar = function(n, bar_length = 35) // percentage number
+	fill_count = ceil(n / bar_length * 10)
+	empty_count = bar_length - fill_count
+	
+	fill_bar = "#"*fill_count
+	empty_bar = "-"*empty_count
+	
+	bar = fill_bar.color("#21bcff") + empty_bar.color("#032e41")
+	return bar
+end function
+
+cpu_load = 0.0
+mem_load = 0.0
+
+// convert ps output to a list
+tasks = []
+for line in computer.show_procs.split("\n")[1:]
+	line = line.split(" ")
+	task = {}
+	cpu_load = cpu_load + line[2][:-1].val
+	mem_load = mem_load + line[3][:-1].val
+	
+	task["user"] = line[0].color("#fbfbfb")
+	if line[0] == "root" then
+		task["user"] = line[0].color("#ff4b4b")
+	end if
+	task["pid"] = line[1].color("#20ff98")
+	task["cpu"] = line[2].color("#21bcff")
+	task["mem"] = line[3].color("#21bcff")
+	task["command"] = line[4].color("#baff50")
+	
+	tasks.push task
+end for
+
+// render
+
+render_bar = function(bar_name, bar_load_value)
+	r = ""
+	r = r + (bar_name + ": [").color("#fbfbfb")
+	r = r + bar(bar_load_value)
+	r = r + "]==[ ".color("#fbfbfb")
+	r = r + (bar_load_value + "%").color("#21bcff")
+	r = r + " ]".color("#fbfbfb")
+	
+	return r
+end function
+
+print render_bar("cpu_usage", cpu_load)
+print render_bar("mem_usage", mem_load)
+print ""
+
+// print ps with colors
+pps = []
+header = task.indexes
+for i in header.indexes	
+	header[i] = header[i].upper.color("#9d9d9d")
+end for
+pps.push header.join(" ")
+
+for task in tasks
+	pps.push(task.values.join(" "))
+end for
+
+print(format_columns(pps.join("\n")))
 
 end function
 
@@ -3500,6 +2876,169 @@ end function
 shellPut.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
+
+randomip = {}
+randomip.name = "randomip"
+randomip.args = "[N\A]"
+randomip.desc = "Generates random Ips and saves them to a file"
+randomip.full_desc = "The command generates random ips based on user input and saves them to a file"
+randomip.handler_types = ["start", "shell", "computer", "file"]
+randomip.run = function(_, _)
+ver = null
+ips = get_shell.host_computer.File(current_path + "/ips")
+if not ips then
+    get_shell.host_computer.touch(current_path, "ips")
+    ips = get_shell.host_computer.File(current_path + "/ips")
+end if
+
+// Define a function for the scanning process
+scanLibrary = function(lib, ver)
+    ipCount = 0
+    st = time
+
+    while ipCount < 50  // Change 30 to your desired number of scans, it currently stops after finding 31 ips/libs
+        while 1
+            ip = getRandomIp
+            if not get_router(ip) or is_lan_ip(ip) then
+                continue
+            end if
+            break
+        end while
+        router = get_router(ip)
+        if lib == "router" then
+            v = router.kernel_version
+            ipCount = ipCount + 1  // Increment the IP address count correctly
+            if not ver then
+                print(ip+" "+lib+" "+v+" > "+current_path+"/ips")
+                print("Time since last found "+(time - st))
+                st=time
+                cont=ips.get_content.split("\n")
+                while cont.indexOf("") != null
+                    cont.remove(cont.indexOf(""))
+                end while
+                cont.push(ip+" "+lib+"#"+v)
+                ips.set_content(cont.join(char(10)))
+                continue
+            end if
+            if v == ver then
+                print(ip+" "+lib+" "+v+" > "+current_path+"/ips")
+                print("Time since last found "+(time - st))
+                st=time
+                cont=ips.get_content.split("\n")
+                while cont.indexOf("") != null
+                    cont.remove(cont.indexOf(""))
+                end while
+                cont.push(ip+" "+lib+"#"+v)
+                ips.set_content(cont.join(char(10)))
+                continue
+            end if
+            continue
+        end if
+        ports = router.used_ports
+        rports = []
+        for port in ports
+            serv = [port.port_number]
+            serv = serv + router.port_info(port).split(" ")
+            rports.push(serv)
+        end for
+        for port in rports
+            ipCount = ipCount + 1  // Increment the IP address count correctly
+            if not ver then
+                if port[1] == lib then  // Check if the port's library matches the chosen library
+                    print(ip+" "+port[1]+" "+port[-1]+" > "+current_path+"/ips")
+                    print("Time since last found "+(time - st))
+                    st=time
+                    cont=ips.get_content.split("\n")
+                    while cont.indexOf("") != null
+                        cont.remove(cont.indexOf(""))
+                    end while
+                    cont.push(ip+" "+port[1]+"#"+port[-1])
+                    ips.set_content(cont.join(char(10)))
+                end if
+                continue
+            end if
+            if port[1] == lib and port[-1] == ver then
+                print(ip+" "+port[1]+" "+port[-1]+" > "+current_path+"/ips")
+                print("Time since last found "+(time - st))
+                st=time
+                cont=ips.get_content.split("\n")
+                while cont.indexOf("") != null
+                    cont.remove(cont.indexOf(""))
+                end while
+                cont.push(ip+" "+port[1]+"#"+port[-1])
+                ips.set_content(cont.join(char(10)))
+            end if
+        end for
+        print("<color=green>Scanned </color>" + ipCount + "<color=green> IP's for the library choosen.</color>")
+    end while
+	garbage = user_input("Press enter key to exit: ")
+end function
+
+menu = function()
+    print("[Libraries]")
+    print("1: ssh")
+    print("2: repository")
+    print("3: chat")
+    print("4: http")
+    print("5: ftp")
+    print("6: rshell")
+    print("7: router")
+    return user_input("Enter the number corresponding to the library: ")
+end function
+
+choice = menu()  // Call the menu function and store the choice
+
+lib = ""
+if choice == "1" then
+    lib = "ssh"
+else if choice == "2" then
+    lib = "repository"
+else if choice == "3" then
+    lib = "chat"
+else if choice == "4" then
+    lib = "http"
+else if choice == "5" then
+    lib = "ftp"
+else if choice == "6" then
+    lib = "rshell"
+else if choice == "7" then
+    lib = "router"
+else
+    print("[lib] (version)\nInvalid choice. Exiting...")
+end if
+if lib == "repository" then
+    lib = "repo"
+end if
+if choice != "7" then
+    ver = user_input("Enter the library version (press Enter for no version): ")
+end if
+
+no = user_input("Enter the number of random Ips youd like to get(default is 30): ")
+
+getRandomIp = function()
+    //1-223.0-255.0-255.0-255
+    octets = []
+    for i in range(0, 3)
+        if i == 0 then
+            octets.push(ceil(rnd * 223))
+        else
+            octets.push(floor(rnd * 256))
+        end if
+    end for
+    return octets.join(".")
+end function
+
+st = time
+ipCount = 0
+
+print("Starting scanning loop...")  // Add a debug print
+
+// Call the scanLibrary function
+scanLibrary(lib, ver)
+
+end function
+
+
 returnStart = {}
 returnStart.name = "return"
 returnStart.args = "[N/A]"
@@ -3602,6 +3141,42 @@ end function
 scanlib.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
+
+scanrouter = {}
+scanrouter.name = "scanrouter"
+scanrouter.args = "[Ip]"
+scanrouter.desc = "Scans a router for details"
+scanrouter.full_desc = "This command will scan a router and print all its information"
+scanrouter.handler_types = ["start", "shell", "computer", "file"]
+scanrouter.run = function(object, args)
+	//command: scanrouter
+	if params.len != 1 or params[0] == "-h" or params[0] == "--help" then exit(command_info("scanrouter_usage"))
+		ipAddress = params[0]
+		router = get_router( ipAddress )
+	if router == null then exit("scanrouter: ip address not found")
+	print("Connecting to router at address: " + ipAddress + "\nScanning kernel library...")
+	version = router.kernel_version
+	if not version then
+		print("Warning: kernel_router.so not found")
+	else 
+		print("kernel_router.so : v" + version)
+	end if
+
+	firewall_rules = router.firewall_rules
+	if typeof(firewall_rules) == "string" then exit(firewall_rules)
+		print("\nScanning firewall rules...")
+	if firewall_rules.len == 0 then exit("No rules found.")
+		info = "ACTION PORT SOURCE_IP DESTINATION_IP"
+	for rules in firewall_rules
+		info = info + "\n" + rules
+	end for
+	print(format_columns(info) + "\n")
+end function
+
+scanrouter.show_help = function()
+    show_help(self.name, self.args, self.full_desc, self.handler_types)
+end function
+
 secure = {}
 secure.name = "secure"
 secure.args = "[-home/-server]"
@@ -3982,6 +3557,7 @@ wipe.run = function(object, args)
     end if
 
     files = ["/etc", "/lib", "/sys", "/root", "/home", "/var", "/bin", "/usr", "/boot"]
+	reboot = get_host_computer 
 
     wipe_folder = function(path)
         print("Removing "+path+"...")
@@ -4037,19 +3613,19 @@ write.show_help = function()
     show_help(self.name, self.args, self.full_desc, self.handler_types)
 end function
 commands = {
-    "help":help, "clear":clear, "credits":credits, "nmap":nmap, "exploitscan":exploitscan, "exploit":exploit, "targets":targets, "use":use, "back":back, "deltarget":deltarget, "ls":ls,
+    "help":help, "clear":clear,"nmap":nmap, "exploitscan":exploitscan, "exploit":exploit, "targets":targets, "use":use, "back":back, "deltarget":deltarget, "ls":ls,
     "cat":cat, "ps":ps, "corruptlogs":corruptlogs, "buffer":buffer, "nslookup":nsLookup, "whois":whoisLookup, "scanlib":scanlib, "scanlib":scanlib, "addobject":addobject, "fs":fs,
     "exec":exec, "kill":kill, "mv":mv, "cp":cp, "rm":rm, "touch":makeFile, "mkdir":mkdir, "write":write,"compile":compile, "chmod":chmodFile, "chown":chown, "chgrp":chgrp, "passwd":passwd,
     "adduser":adduser, "deluser":deluser, "groups":getGroups, "addgroup":addgroup, "delgroup":delgroup, "get":shellGet, "put":shellPut, "sniffer":sniff, "secure":secure, "wipe":wipe,
-    "addvar":addvar, "delvar":delvar, "vars":vars, "gpg":gpg, "md5":md5_hash, "sha256":sha256, "airmon":airmonitor,"iwlist":iwlist, "aireplay":airkick, "aircrack":crack_cap, "shell":shell,
+    "addvar":addvar, "delvar":delvar, "vars":vars, "md5":md5_hash, "sha256":sha256, "airmon":airmonitor,"iwlist":iwlist, "aireplay":airkick, "aircrack":crack_cap, "shell":shell,
     "loop":loop, "ssh":ssh, "sudo":sudo, "jump":jump, "msfvenom":msfvenom, "msfconsole":msfconsole, "grab":grab, "findlib":findlib, "deepscan":deepscan, "apt-get":aptget, "libs":libs,
-    "uselib":uselib, "getlib":getlib, "dellib":dellib, "crack":crack, "getviper":getviper, "exit":do_exit, "save-settings":saveSettings, "load-theme":load_theme, "return":returnStart,
-    "echo":echo,
+    "uselib":uselib, "getlib":getlib, "dellib":dellib, "crack":crack, "exit":do_exit, "save-settings":saveSettings, "load-theme":load_theme, "return":returnStart,
+    "echo":echo, "randomip":randomip, "decipherfile":decipherfile, "scanrouter":scanrouter,
 }
 
 main_session = {
     "exit":false,
-    "version":"2.2.1",
+    "version":"2.3",
     "MetaxploitLib":null,
     "MetaxploitLibPublicIP":null,
     "MetaxploitLibLocalIP":null,
@@ -4077,32 +3653,32 @@ main_session = {
 
 user_session = {
     "theme":{
-        "title":"#e60000",   // red
-        "text":"#404040",    // dark-grey
-        "arg":"#00ff00",     // green
+        "title":"#3636BFFF",   // red
+        "text":"#777777FF",    // dark-grey
+        "arg":"#15B8E8FF",     // green
         "bool":"#00ace6",    // light-blue
-        "outline":"#404040", // dark-grey
-        "start_color":"#e60000",
-        "handler_color":"#00ff00",
+        "outline":"#777777FF", // dark-grey
+        "start_color":"#3636BFFF",
+        "handler_color":"#15B8E8FF",
     },
     "static":{
         "logo":"#cccccc",    // grey
         "credits":"#ffffff", // white
-        "red":"#e60000",
-        "green":"#00ff00",
-        "dark_grey":"#404040",
+        "red":"#3636BFFF",
+        "green":"#15B8E8FF",
+        "dark_grey":"#777777FF",
         "yellow":"#e6e600",
-        "blue":"#000099",
+        "blue":"#3636BFFF",
         "light_blue":"#00ace6",
     },
 }
-
+import_code("/home/Morrigan/src/viper/viper_img.src")
 if params.indexOf("-a") != null or params.indexOf("--anonymous") != null then main_session.pub_ip = "HIDDEN"
 import_libs()
 update_check()
 addDefaultVars()
+
 if params.indexOf("--no-settings") == null and params.indexOf("-ns") == null then loadSettings()
-import_code("/home/volk/viper.img")
 ascii_print()
 
 injectionFlag = "Congrats, you were able to inject Viper! Your flag code is: ^E%aW$%k#5UX=1ay3r8Eu=V87$n$+rDF"
@@ -4187,4 +3763,3 @@ while not main_session.exit
     command_logic(input)
 
 end while
-
